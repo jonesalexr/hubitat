@@ -20,7 +20,7 @@
  *
  */
  metadata {
-  definition (name: "Sony Bravia TV Rest Control", namespace: "ajones", author: "Alex Jones") {
+  definition (name: "Sony Bravia TV Rest Control no poll", namespace: "ajones", author: "Alex Jones") {
     capability "Switch"
     capability "Refresh"
     capability "Polling"
@@ -30,7 +30,7 @@
     command "TerminateApps"
     command "SendURL", ["string"]
   command "LaunchApp", [[name:"ChooseApp", type: "ENUM", constraints: [
-				"",
+				"Not set",
                 "Disney+",
                 "ESPN",
                 "Hulu",
@@ -44,9 +44,9 @@
                 "tinyCam PRO",
                 "TV",
                 "YouTube"
-                ] ] ]
+                ] ] ] 
     command "InputSelect", [[name:"Choose Input", type: "ENUM", constraints: [
-				"",
+				"Not set",
                 "HDMI1",
                 "HDMI2",
                 "HDMI3",
@@ -57,7 +57,7 @@
     [name:"jsonmsg",type:"JSON_OBJECT", description:"json msg for post", constraints:["JSON_OBJECT"]]
     ]
     command "keyPress", [[name:"Key Press Action", type: "ENUM", constraints: [
-                "",
+                "Not set",
                 "ChannelUp",
                 "ChannelDown",
                 "VolumeUp",
@@ -112,30 +112,33 @@ preferences {
         input("ipPort", "string", title:"Sony Port (default: 80)", defaultValue:80, required:true, displayDuringSetup:true)
         input("PSK", "string", title:"PSK Passphrase", defaultValue:"", required:false, displayDuringSetup:true)
         input("WOLEnable", "bool", title:"Send WOL Packet when off", defaultValue:false)
-        input("refreshInterval", "enum", title: "Refresh Interval in minutes", defaultValue: "10", required:true, displayDuringSetup:true, options: ["1","5","10","15","30"])
+        input("refreshInterval", "enum", title: "Refresh Interval in minutes", defaultValue: "10", required:true, displayDuringSetup:true, options: ["0","1","5","10","15","30"])
         input("logEnable", "bool", title: "Enable debug logging for 1 hour", defaultValue: true)
     }
  }
 
  // Utility Functions-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-//Below function will run the refresh task according the schedule set in preferences
+//Below function will run the refresh task according the schedule set in preferences 
+
  private startScheduledRefresh() {
     if (logEnable) log.debug "startScheduledRefresh()"
     // Get minutes from settings
     def minutes = settings.refreshInterval?.toInteger()
-    if (!minutes) {
+     if (minutes == []) {
         log.warn "Using default refresh interval: 10"
         minutes = 10
     }
     if (logEnable) log.debug "Scheduling polling task for every '${minutes}' minutes"
     if (minutes == 1){
         runEvery1Minute(refresh)
+    } else if (minutes == 0){
+        unschedule(refresh)
     } else {
         "runEvery${minutes}Minutes"(refresh)
     }
     runEvery30Minutes(getInfo)
-}
+} 
 
 //Below function will take place anytime the save button is pressed on the driver page
 def updated() {
@@ -383,12 +386,12 @@ def poll() {
 def refresh() {
     if (logEnable) log.debug "Refreshing"
     getPowerStatus()
-    if (state.devicepower == "on"){
+   /* if (state.devicepower == "on"){
         getSoundVolume()
         getMuteStatus()
         getCurrentSource()
         getSoundSettings()
-}
+}*/
 }
 
 
