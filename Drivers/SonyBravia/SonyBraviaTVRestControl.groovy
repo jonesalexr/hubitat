@@ -21,10 +21,10 @@
  */
  metadata {
   definition (name: "Sony Bravia TV Rest Control", namespace: "ajones", author: "Alex Jones") {
-    capability "Switch"
+    capability "Switch"  
     capability "Refresh"
-    capability "Polling"
     capability "AudioVolume"
+    capability "Initialize"      
     command "getInfo"
     command "Reboot"
     command "TerminateApps"
@@ -112,47 +112,77 @@ preferences {
         input("ipPort", "string", title:"Sony Port (default: 80)", defaultValue:80, required:true, displayDuringSetup:true)
         input("PSK", "string", title:"PSK Passphrase", defaultValue:"", required:false, displayDuringSetup:true)
         input("WOLEnable", "bool", title:"Send WOL Packet when off", defaultValue:false)
-        input("refreshInterval", "enum", title: "Refresh Interval in minutes", defaultValue: "10", required:true, displayDuringSetup:true, options: ["1","5","10","15","30"])
-        input("logEnable", "bool", title: "Enable debug logging for 1 hour", defaultValue: true)
+        input("netConnectivity", "enum", title: "Network Interface type", defaultValue: "WIFI", required:true, displayDuringSetup:true, options: ["WIFI","Ethernet"])    
+        input("refreshPWRInterval", "number", title: "Power refresh Interval in minutes", defaultValue: "60", required:true, displayDuringSetup:true)
+        input("refreshPwrUnit", "enum", title: "Power refresh  in min or second", defaultValue: "Seconds", required:true, displayDuringSetup:true, options: ["Seconds","Minutes"])    
+        input("refreshSNDInterval", "number", title: "Volume refresh Interval", defaultValue: "10", required:true, displayDuringSetup:true)
+        input("refreshSNDUnit", "enum", title: "Voluem refresh in min or second", defaultValue: "Minutes", required:true, displayDuringSetup:true, options: ["Seconds","Minutes"])
+        input("refreshSNDSettingInterval", "number", title: "Volume refresh Interval", defaultValue: "10", required:true, displayDuringSetup:true)
+        input("refreshSNDSettingUnit", "enum", title: "Voluem refresh in min or second", defaultValue: "Minutes", required:true, displayDuringSetup:true, options: ["Seconds","Minutes"])     
+        input("refreshInpInterval", "number", title: "Refresh Input interval", defaultValue: "10", required:true, displayDuringSetup:true)
+        input("refreshInpUnit", "enum", title: "Voluem refresh in min or second", defaultValue: "Minutes", required:true, displayDuringSetup:true, options: ["Seconds","Minutes"])     
+
+    input("logEnable", "bool", title: "Enable debug logging for 1 hour", defaultValue: true)
     }
  }
 
  // Utility Functions-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
+
+
 //Below function will run the refresh task according the schedule set in preferences
  private startScheduledRefresh() {
     if (logEnable) log.debug "startScheduledRefresh()"
-    // Get minutes from settings
-    def minutes = settings.refreshInterval?.toInteger()
-    if (!minutes) {
-        log.warn "Using default refresh interval: 10"
-        minutes = 10
-    }
     if (logEnable) log.debug "Scheduling polling task for every '${minutes}' minutes"
-    if (minutes == 1){
-        runEvery1Minute(refresh)
-    } else {
-        "runEvery${minutes}Minutes"(refresh)
+    if (refreshPWRInterval >= 1) {
+        if (refreshPwrUnit == "Seconds") {
+            schedule('0/'+"${refreshPWRInterval}"+' * * ? * * *', getPowerStatus)
+        } else {
+            schedule('3 00/'+"${refreshPWRInterval}"+' * ? * * *', getPowerStatus)
+        }
     }
-    runEvery30Minutes(getInfo)
+    if (refreshSNDInterval >= 1) {
+        if (refreshSNDUnit == "Seconds") {
+            schedule('0/'+"${refreshSNDInterval}"+' * * ? * * *', getSoundVolume)
+        } else {
+            schedule('5 00/'+"${refreshSNDInterval}"+' * ? * * *', getSoundVolume)
+        }
+    }
+    if (refreshSNDSettingInterval >= 1) {
+        if (refreshSNDSettingUnit == "Seconds") {
+            schedule('0/'+"${refreshSNDSettingInterval}"+' * * ? * * *', getSoundSettings)
+        } else {
+            schedule('8 00/'+"${refreshSNDSettingInterval}"+' * ? * * *', getSoundSettings)
+        }
+    }     
+    if (refreshInpInterval >= 1) {
+        if (refreshInpUnit == "Seconds") {
+            schedule('0/'+"${refreshInpInterval}"+' * * ? * * *', getCurrentSource)
+        } else {
+            schedule('9 00/'+"${refreshInpInterval}"+' * ? * * *', getCurrentSource)
+        }
+    } 
 }
 
 //Below function will take place anytime the save button is pressed on the driver page
 def updated() {
     log.warn "Updated with settings: ${settings}"
-    // Prevent function from running twice on save
-    if (!state.updated || now() >= state.updated + 5000){
-        // Unschedule existing tasks
-        unschedule()
-        // Any additional tasks here
-        // Start scheduled task
-        startScheduledRefresh()
-    }
-    state.updated = now()
+    unschedule()
+    startScheduledRefresh()
     if (logEnable) runIn(3600,logsOff)
     refresh()
-    getInfo()
 }
+
+def initialize() {
+    refresh()
+    // Unschedule existing tasks
+    unschedule()
+    // Any additional tasks here
+    // Start scheduled task
+    startScheduledRefresh()
+//    getInfo()
+}
+
 
 //Below function will disable debugs logs after 3600 seconds called in the updated function
 def logsOff(){
@@ -225,44 +255,73 @@ private jsonreturnaction(response){
   	//Set the Global value of state.device on or off
     if (logEnable) log.debug "Status is ${response.data.result[0]?.status}"
     def devicestate = (response.data.result[0]?.status == "active") ? "on" : "off"
-    state.devicepower = devicestate
-    sendEvent(name: "switch", value: devicestate, isStateChange: true)
+    sendEvent(name: "switch", value: devicestate)
     if (logEnable) log.debug "DeviceState Event is '${devicestate}'"
+  }
+  if (response.data?.id == 3) {
+  	//Set the Global value of state.device on or off
+    if (logEnable) log.debug "Status is ${response.data.result[0]?.status}"
+    sendEvent(name: "switch", value: "on")
+    if (logEnable) log.debug "DeviceState Event is on"
+  }
+  if (response.data?.id == 4) {
+  	//Set the Global value of state.device on or off
+    if (logEnable) log.debug "Status is ${response.data.result[0]?.status}"
+    sendEvent(name: "switch", value: "off")
+    if (logEnable) log.debug "DeviceState Event is off"
   }
 
   if (response.data?.id == 50) {
   	//Set the Global value of state.devicevolume
     if (logEnable) log.debug "Volume is ${response.data.result[0][0]?.volume}"
+    if (logEnable) log.debug "Mute is ${response.data.result[0][0]?.mute}"      
     def devicevolume = response.data.result[0][0]?.volume
-       sendEvent(name: "volume", value: devicevolume, isStateChange: true)
+    def devicemute = (response.data.result[0][0]?.mute == true) ? "on" : "off"
+       sendEvent(name: "mute", value: devicemute)
+       sendEvent(name: "volume", value: devicevolume)
     if (logEnable) log.debug "DeviceVolume Event is '${devicevolume}'"
+    if (logEnable) log.debug "Devicemute State is '${devicemute}'"
   }
   if (response.data?.id == 40) {
   	//Set the Global value of state.devicemute
     if (logEnable) log.debug "Mute is ${response.data.result[0][0]?.mute}"
     def devicemute = (response.data.result[0][0]?.mute == true) ? "on" : "off"
-    sendEvent(name: "mute", value: devicemute, isStateChange: true)
+    sendEvent(name: "mute", value: devicemute)
     if (logEnable) log.debug "Devicemute State is '${devicemute}'"
   }
+  if (response.data?.id == 41) {
+  	//Set the Global value of state.devicemute  Mute
+    if (logEnable) log.debug "Mute is ${response.data.result[0][0]?.mute}"
+    def devicemute = "on"
+    sendEvent(name: "mute", value: devicemute)
+    if (logEnable) log.debug "Devicemute State is '${devicemute}'"
+  }
+  if (response.data?.id == 42) {
+  	//Set the Global value of state.devicemute Unmute
+    if (logEnable) log.debug "Mute is ${response.data.result[0][0]?.mute}"
+    def devicemute = off
+    sendEvent(name: "mute", value: devicemute)
+    if (logEnable) log.debug "Devicemute State is '${devicemute}'"
+  }    
   if (response.data?.id == 73) {
   	//Set the Global value of speakeroutput
     if (logEnable) log.debug "Speaker output is ${response.data.result[0][0]?.currentValue}"
     def speakermode = response.data.result[0][0]?.currentValue
-    sendEvent(name: "SpeakerOutput", value: speakermode, isStateChange: true)
+    sendEvent(name: "SpeakerOutput", value: speakermode)
     if (logEnable) log.debug "speakermode State is '${speakermode}'"
   }
   if (response.data?.id == 89) {
   	//Set the Global value of powersave
     if (logEnable) log.debug "Powersave Mode is ${response.data.result[0]?.mode}"
     def powersavemode = response.data.result[0]?.mode
-    sendEvent(name: "PowerSave", value: powersavemode, isStateChange: true)
+    sendEvent(name: "PowerSave", value: powersavemode)
     if (logEnable) log.debug "Powersavemode is '${powersavemode}'"
   }
   if (response.data?.id == 86) {
   	//Set the Global value of powersave
     if (logEnable) log.debug "WOL Mode is ${response.data.result[0]?.enabled}"
     def wolmode = response.data.result[0]?.enabled
-    sendEvent(name: "WakeOnLanEnabled", value: wolmode, isStateChange: true)
+    sendEvent(name: "WakeOnLanEnabled", value: wolmode)
   }
   if (response.data?.id == 99) {
   	//Set the Global value of systeminfo
@@ -305,39 +364,39 @@ private jsonreturnaction(response){
 
             if (logEnable) log.debug "currentinput is ${response.data.result[0]?.uri}"
             def currentinput = response.data.result[0]?.uri
-            sendEvent(name: "CurrentInput", value: currentinput, isStateChange: true)
+            sendEvent(name: "CurrentInput", value: currentinput)
 
             if (logEnable) log.debug "source is ${response.data.result[0]?.source}"
             def inputsource = response.data.result[0]?.source
-            sendEvent(name: "Source", value: inputsource, isStateChange: true)
+            sendEvent(name: "Source", value: inputsource)
 
             if (logEnable) log.debug "title State is ${response.data.result[0]?.title}"
             //state.title = response.data.result[0]?.title
             def inputtitle = response.data.result[0]?.title
-            sendEvent(name: "Title", value: inputtitle, isStateChange: true)
+            sendEvent(name: "Title", value: inputtitle)
 
             if (logEnable) log.debug "dispNum State is ${response.data.result[0]?.dispNum}"
             def dispNum = response.data.result[0]?.dispNum
-            sendEvent(name: "Channel", value: dispNum, isStateChange: true)
+            sendEvent(name: "Channel", value: dispNum)
 
             if (logEnable) log.debug "originalDispNum State is ${response.data.result[0]?.originalDispNum}"
             //state.originalDispNum = response.data.result[0]?.originalDispNum
             def origdisplaynum = response.data.result[0]?.originalDispNum
-            sendEvent(name: "OriginalDisplayNumber", value: origdisplaynum, isStateChange: true)
+            sendEvent(name: "OriginalDisplayNumber", value: origdisplaynum)
 
             if (logEnable) log.debug "programTitle State is ${response.data.result[0]?.programTitle}"
             //state.programTitle = response.data.result[0]?.programTitle
             def progtitle = response.data.result[0]?.programTitle
-            sendEvent(name: "ProgramTitle", value: progtitle, isStateChange: true)
+            sendEvent(name: "ProgramTitle", value: progtitle)
 
         }
         if (responsedataerror != null){
-            sendEvent(name: "CurrentInput", value: "SmartMode", isStateChange: true)
-            sendEvent(name: "Channel", value: "SmartMode", isStateChange: true)
-            sendEvent(name: "Source", value: "SmartMode", isStateChange: true)
-            sendEvent(name: "Title", value: "SmartMode", isStateChange: true)
-            sendEvent(name: "OriginalDisplayNumber", value: "SmartMode", isStateChange: true)
-            sendEvent(name: "ProgramTitle", value: "SmartMode", isStateChange: true)
+            sendEvent(name: "CurrentInput", value: "SmartMode")
+            sendEvent(name: "Channel", value: "SmartMode")
+            sendEvent(name: "Source", value: "SmartMode")
+            sendEvent(name: "Title", value: "SmartMode")
+            sendEvent(name: "OriginalDisplayNumber", value: "SmartMode")
+            sendEvent(name: "ProgramTitle", value: "SmartMode")
 
         }
 
@@ -353,14 +412,12 @@ private jsonreturnaction(response){
 //Button Commands  ------------------------------------------------------------------------------------------------------------------
 
 def getInfo(){
-    if (logEnable) log.debug "getInfo pushed"
-    if (state.devicepower == "on"){
-    getSystemInfo()
-    getInterfaceInfo()
-    getEthernetSettings()
-    getPowerSaveMode()
-    getWOLMode()
-    }
+    if (logEnable) log.debug "getInfo pushed"         
+        getSystemInfo() // TV System Data
+        getInterfaceInfo() // TV Type and versions
+        getEthernetSettings() // Network Details
+        getPowerSaveMode() // Power Save Mode
+        getWOLMode() //WOL Mode.
 }
 
 //Switch Capability+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -375,22 +432,15 @@ def off(){
     setPowerStatusOff()
 }
 
-def poll() {
-    if (logEnable) log.debug "Executing poll(), unscheduling existing"
-    refresh()
-}
-
 def refresh() {
     if (logEnable) log.debug "Refreshing"
     getPowerStatus()
-    if (state.devicepower == "on"){
+    if (device.currentValue("switch") == "on"){        
         getSoundVolume()
-        getMuteStatus()
         getCurrentSource()
         getSoundSettings()
 }
 }
-
 
 //AudioVolume Capability++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 def setVolume(level) {
@@ -435,8 +485,6 @@ def setPowerStatusOn() {
     def lib = "/sony/system"
     def json = "{\"method\":\"setPowerStatus\",\"version\":\"1.0\",\"params\":[{\"status\":true}],\"id\":3}"
     postAPICall(lib,json)
-    pauseExecution(2000)
-    getPowerStatus()
 }
 
 def setPowerStatusOff() {
@@ -444,15 +492,17 @@ def setPowerStatusOff() {
     def lib = "/sony/system"
     def json = "{\"method\":\"setPowerStatus\",\"version\":\"1.0\",\"params\":[{\"status\":false}],\"id\":4}"
     postAPICall(lib,json)
-    pauseExecution(2000)
-    getPowerStatus()
 }
 
 def getSoundVolume() {
 if (logEnable) log.debug "Executing 'getSoundVolume' "
-    def lib = "/sony/audio"
-    def json = "{\"method\":\"getVolumeInformation\",\"version\":\"1.0\",\"params\":[{\"output\":\"\"}],\"id\":50}"
-    postAPICall(lib,json)
+    if (device.currentValue("switch") == "on"){ 
+        def lib = "/sony/audio"
+        def json = "{\"method\":\"getVolumeInformation\",\"version\":\"1.0\",\"params\":[{\"output\":\"\"}],\"id\":50}"
+        postAPICall(lib,json)
+    } else {
+        if (logEnable) log.debug "Power off not executing 'getSoundVolume' "
+    }
 }
 
 def setSoundVolume(def Level) {
@@ -460,23 +510,21 @@ def setSoundVolume(def Level) {
     def lib = "/sony/audio"
     def json = "{\"method\":\"setAudioVolume\",\"id\":51,\"params\":[{\"volume\":\"${Level}\",\"target\":\"\",\"ui\":\"on\"}],\"version\":\"1.2\"}"
     postAPICall(lib,json)
-    getSoundVolume()
+    sendEvent(name: "volume", value: Level)
 }
 
-def getMuteStatus(){
+/* def getMuteStatus(){
     if (logEnable) log.debug "Executing 'getMuteStatus' "
     def lib = "/sony/audio"
     def json = "{\"method\":\"getVolumeInformation\",\"version\":\"1.0\",\"params\":[{\"output\":\"\"}],\"id\":40}"
     postAPICall(lib,json)
-}
+} */ 
 
 def setMute(){
     if (logEnable) log.debug "Executing 'setMute' "
     def lib = "/sony/audio"
     def json = "{\"method\":\"setAudioMute\",\"id\":41,\"params\":[{\"status\":true}],\"version\":\"1.0\"}"
     postAPICall(lib,json)
-    pauseExecution(2000)
-    getMuteStatus()
 }
 
 def setUnMute(){
@@ -484,8 +532,6 @@ def setUnMute(){
     def lib = "/sony/audio"
     def json = "{\"method\":\"setAudioMute\",\"id\":42,\"params\":[{\"status\":false}],\"version\":\"1.0\"}"
     postAPICall(lib,json)
-    pauseExecution(2000)
-    getMuteStatus()
 }
 
 def getSystemInfo(){
@@ -505,7 +551,11 @@ def getInterfaceInfo(){
 def getEthernetSettings(){
     if (logEnable) log.debug "Executing 'getEthernetSettings' "
     def lib = "/sony/system"
+    if (netConnectivity == "WIFI") {
+    def json = "{\"method\":\"getNetworkSettings\",\"id\":97,\"params\":[{\"netif\":\"wlan0\"}],\"version\":\"1.0\"}"
+    } else {
     def json = "{\"method\":\"getNetworkSettings\",\"id\":97,\"params\":[{\"netif\":\"eth0\"}],\"version\":\"1.0\"}"
+    }
     postAPICall(lib,json)
 }
 
@@ -525,10 +575,14 @@ def sendDebugString(libpath,jsonmsg){
 }
 
 def getCurrentSource(){
+    if (device.currentValue("switch") == "on"){ 
         if (logEnable) log.debug "Executing 'getCurrentSource' "
-    def lib = "/sony/avContent"
-    def json = "{\"method\":\"getPlayingContentInfo\",\"id\":70,\"params\":[{\"output\":\"\"}],\"version\":\"1.0\"}"
-    postAPICall(lib,json)
+        def lib = "/sony/avContent"
+        def json = "{\"method\":\"getPlayingContentInfo\",\"id\":70,\"params\":[{\"output\":\"\"}],\"version\":\"1.0\"}"
+        postAPICall(lib,json)
+    } else {
+        if (logEnable) log.debug "Power off not executing 'getCurrentSource' "
+    }
 }
 
 def Reboot(){
@@ -545,8 +599,6 @@ def TerminateApps(){
     def lib = "/sony/appControl"
     def json = "{\"method\":\"terminateApps\",\"id\":55,\"params\":[],\"version\":\"1.0\"}"
     postAPICall(lib,json)
-    pauseExecution(2000)
-    refresh()
 }
 
 def InputSelect(def inputname){
@@ -604,10 +656,14 @@ def SendURL(def url){
 }
 
 def getSoundSettings(){
-    if (logEnable) log.debug "Executing 'getSoundSettings' "
-    def lib = "/sony/audio"
-    def json = "{\"method\":\"getSoundSettings\",\"id\":73,\"params\":[{\"target\":\"\"}],\"version\":\"1.1\"}"
-    postAPICall(lib,json)
+    if (device.currentValue("switch") == "on"){ 
+        if (logEnable) log.debug "Executing 'getSoundSettings' "
+        def lib = "/sony/audio"
+        def json = "{\"method\":\"getSoundSettings\",\"id\":73,\"params\":[{\"target\":\"\"}],\"version\":\"1.1\"}"
+        postAPICall(lib,json)
+    } else {
+        if (logEnable) log.debug "Power off not executing 'getSoundSettings' "
+    }
 }
 
 def getPowerSaveMode(){
