@@ -113,14 +113,14 @@ preferences {
         input("PSK", "string", title:"PSK Passphrase", defaultValue:"", required:false, displayDuringSetup:true)
         input("WOLEnable", "bool", title:"Send WOL Packet when off", defaultValue:false)
         input("netConnectivity", "enum", title: "Network Interface type", defaultValue: "WIFI", required:true, displayDuringSetup:true, options: ["WIFI","Ethernet"])    
-        input("refreshPWRInterval", "number", title: "Power refresh Interval in minutes", defaultValue: "60", required:true, displayDuringSetup:true)
+        input("refreshPWRInterval", "number", title: "Power refresh Interval", defaultValue: "60", required:true, displayDuringSetup:true)
         input("refreshPwrUnit", "enum", title: "Power refresh  in min or second", defaultValue: "Seconds", required:true, displayDuringSetup:true, options: ["Seconds","Minutes"])    
         input("refreshSNDInterval", "number", title: "Volume refresh Interval", defaultValue: "10", required:true, displayDuringSetup:true)
         input("refreshSNDUnit", "enum", title: "Voluem refresh in min or second", defaultValue: "Minutes", required:true, displayDuringSetup:true, options: ["Seconds","Minutes"])
-        input("refreshSNDSettingInterval", "number", title: "Volume refresh Interval", defaultValue: "10", required:true, displayDuringSetup:true)
-        input("refreshSNDSettingUnit", "enum", title: "Voluem refresh in min or second", defaultValue: "Minutes", required:true, displayDuringSetup:true, options: ["Seconds","Minutes"])     
+        input("refreshSNDSettingInterval", "number", title: " Speaker output refresh Interval", defaultValue: "10", required:true, displayDuringSetup:true)
+        input("refreshSNDSettingUnit", "enum", title: "Speaker output refresh in min or second", defaultValue: "Minutes", required:true, displayDuringSetup:true, options: ["Seconds","Minutes"])     
         input("refreshInpInterval", "number", title: "Refresh Input interval", defaultValue: "10", required:true, displayDuringSetup:true)
-        input("refreshInpUnit", "enum", title: "Voluem refresh in min or second", defaultValue: "Minutes", required:true, displayDuringSetup:true, options: ["Seconds","Minutes"])     
+        input("refreshInpUnit", "enum", title: "Input refresh in min or second", defaultValue: "Minutes", required:true, displayDuringSetup:true, options: ["Seconds","Minutes"])     
 
     input("logEnable", "bool", title: "Enable debug logging for 1 hour", defaultValue: true)
     }
